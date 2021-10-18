@@ -46,7 +46,7 @@ def training(args, dataloader, test_dataloader, device):
                 plot_viz.append_loss(epoch, iteration, losses['G_perceptual'], "Generator Perceptual")
                 plot_viz.append_loss(epoch, iteration, losses['G_style_loss'], "Generator Style")
                 plot_viz.append_loss(epoch, iteration, losses['G_l1_loss'], "Generator L1")
-                plot_viz.append_loss(epoch, iteration, losses['D_feat_match_loss'], "D Feature Matching")
+                #plot_viz.append_loss(epoch, iteration, losses['D_feat_match_loss'], "D Feature Matching")
                 plot_viz.append_loss(epoch, iteration, losses['TV_loss'], "TV")
                 plot_viz.append_loss(epoch, iteration, losses['G_loss'], "Generator")
 

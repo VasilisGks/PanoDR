@@ -14,6 +14,8 @@ from vcl3datlantis.models.GatedConv.network_module import *
 from vcl3datlantis.method import spherical as S360 
 from .PanoDR_networks import *
 from vcl3datlantis.losses.featureMatching import FeatureMatchingLoss
+from vcl3datlantis.models.PanoDR.oasis_discr import *
+import vcl3datlantis.losses.oasis_loss as oasis_losses 
 
 class InpaintingModel(BaseModel):
     def __init__(self, act=F.elu, opt=None, device=None):
@@ -25,7 +27,7 @@ class InpaintingModel(BaseModel):
         init_weights(self.netG, init_type=self.opt.init_type)
         
         if self.opt.structure_model != "":
-            ckpnt = torch.load(opt.segmentation_model_chkpnt)
+            ckpnt = torch.load(opt.segmentation_model_chkpnt, map_location=torch.device(self.device))
             self.netG.structure_model.load_state_dict(ckpnt)
             self.netG.structure_model.to(self.device)
 
@@ -39,10 +41,17 @@ class InpaintingModel(BaseModel):
         if self.opt.phase == 'test':
             return
 
-        self.netD = Discriminator(self.opt.in_d_channels).to(self.device)
+        if self.opt.unet_discr == True:
+            self.netD = OASIS_Discriminator(self.opt).to(self.device)
+            self.oasis_losses = oasis_losses.losses_computer(self.opt)
+        else:
+            self.netD = Discriminator(self.opt.in_d_channels).to(self.device)
+
         init_weights(self.netD, init_type=self.opt.init_type)
-
-
+        model_parameters = filter(lambda p: p.requires_grad, self.netD.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print("{} total parameters for Unet Discriminator".format(params))
+        
         self.optimizer_D = None
         self.optimizers = []
         self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(self.opt.b1, self.opt.b2))
@@ -79,6 +88,8 @@ class InpaintingModel(BaseModel):
         self.iteration = None
         self.out = None
         self.second_in = None
+        self.d_out_fake = None
+        self.d_out_real = None
         self.attention_weights_256 = S360.weights.theta_confidence(                
         S360.grid.create_spherical_grid(self.opt.width)).to(self.device)
 
@@ -111,8 +122,14 @@ class InpaintingModel(BaseModel):
         self.iteration = iteration
 
     def forward_G(self):  
-        self.G_loss_adv, self.D_real_feats, self.D_fake_feats = self.advLoss.gen_loss(self.gt_empty, self.out, self.inverse_mask)
-        self.G_loss_adv = self.opt.lambda_adv*self.G_loss_adv
+        if self.opt.unet_discr == True:
+            self.d_out_fake = self.netD(self.out)
+            self.G_loss_adv = self.oasis_losses.loss(self.d_out_fake, self.gt_label_one_hot, for_real=True)
+
+        else:
+            self.G_loss_adv, self.D_real_feats, self.D_fake_feats = self.advLoss.gen_loss(self.gt_empty, self.out, self.inverse_mask)
+            self.G_loss_adv = self.opt.lambda_adv*self.G_loss_adv
+            self.D_feat_match_loss = self.opt.lambda_d_match * self.FeatMatch(self.D_fake_feats, self.D_real_feats) 
 
         self.comp_feats = self.VGG_features(self.out)
         self.comp_feats_patch = self.VGG_features(self.comp)
@@ -122,14 +139,23 @@ class InpaintingModel(BaseModel):
         self.G_style_loss = self.opt.lambda_style*self.style_loss(self.comp_feats, self.gt_feats)  
         self.G_style_patch_loss = self.opt.lambda_style_patch*self.style_loss(self.comp_feats_patch, self.gt_feats)
         self.G_style_loss +=self.G_style_patch_loss
-        self.D_feat_match_loss = self.opt.lambda_d_match * self.FeatMatch(self.D_fake_feats, self.D_real_feats) 
+        
         self.G_l1_loss = (self.attention_weights_256 *(self.opt.lambda_l1 * torch.abs(self.out-self.gt_empty))).mean()
         self.TV_loss = self.opt.lambda_tv * TV_loss((self.inverse_mask*self.out)) 
 
-        self.G_loss = self.G_l1_loss + self.G_loss_adv + self.G_perceptual + self.D_feat_match_loss + self.G_style_loss + self.TV_loss 
+        self.G_loss = self.G_l1_loss + self.G_loss_adv + self.G_perceptual + self.G_style_loss + self.TV_loss 
+        if self.opt.unet_discr == False:
+            self.G_loss  += self.D_feat_match_loss
 
     def forward_D(self):
-        self.D_loss = self.advLoss.dis_loss(self.gt_empty, self.out.detach(), self.inverse_mask)
+        if self.opt.unet_discr == True:
+            loss_D_fake =  self.oasis_losses.loss(self.d_out_fake.detach(), self.gt_label_one_hot,for_real=False)
+            self.d_out_real = self.netD(self.gt_empty) 
+            loss_D_real =  self.oasis_losses.loss(self.d_out_real, self.gt_label_one_hot,for_real=True)
+            self.D_loss = loss_D_real + loss_D_fake 
+
+        else:
+            self.D_loss = self.advLoss.dis_loss(self.gt_empty, self.out.detach(), self.inverse_mask)
 
     def backward_G(self):
         self.G_loss.backward()
@@ -169,7 +195,7 @@ class InpaintingModel(BaseModel):
                       'G_style_loss':  self.G_style_loss.detach(),
                       'G_perceptual': self.G_perceptual.detach(),
                       'G_l1_loss':     self.G_l1_loss.detach(),
-                      'D_feat_match_loss': self.D_feat_match_loss,
+                      #'D_feat_match_loss': self.D_feat_match_loss,
                       'TV_loss':     self.TV_loss.detach(),
                       'D_loss':            self.D_loss.detach()})
         return _loss
@@ -189,7 +215,6 @@ class InpaintingModel(BaseModel):
         'Semantic_layout_pred': semantic_prediction,
         "Gen_prediction": self.out.cpu().detach()
         }
-        
 
     def evaluate(self, rec, epoch):
         metrics_writer = self.opt.results_path+str(self.opt.name)+".txt"
@@ -198,7 +223,6 @@ class InpaintingModel(BaseModel):
         f.write("PSNR,{},SSIM,{},L1,{},MAE,{},LPIPS,{},Epoch,{}" .format(psnr, ssim, l1, mae, lpips, str(epoch))+"\n")
         f.close()
         return psnr, ssim, mae, lpips
-
 
     def inference(self, epoch):
         _, out , self.structure_model_output, self.structure_model_output_soft = self.netG(self.images, self.inverse_mask, self.masked_input,  self.device, self.opt.use_sean)

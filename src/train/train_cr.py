@@ -4,15 +4,15 @@ import sys
 
 def parseArguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_path', type=str, default='')
-    parser.add_argument('--test_path', type=str, default='')
-    parser.add_argument('--results_path', type=str, default='')
-    parser.add_argument('--gt_results_path', type=str, default='')
-    parser.add_argument('--pred_results_path', type=str, default='')
-    parser.add_argument('--segmentation_model_chkpnt', type = str, default = '', help = 'Save checkpoints here') 
+    parser.add_argument("--train_path", type=str, default='D:/Data/Structure3D/Structure3D/Structured3D', help="Path to the training file containing the train set files paths")
+    parser.add_argument("--test_path", type=str, default='D:/Data/Structure3D/Structure3D/Structured3D_test', help="Path to the testing file containing the test set file paths")
+    parser.add_argument('--results_path', type=str, default='D:/codes/DRext_files/DRext_files')
+    parser.add_argument('--gt_results_path', type=str, default='D:/codes/DRext_files/DRext_files/gt/')
+    parser.add_argument('--pred_results_path', type=str, default='D:/codes/DRext_files/DRext_files/pred/')
+    parser.add_argument('--segmentation_model_chkpnt', type = str, default = 'D:/codes/DRext_files/Unet_layout.model', help = 'Save checkpoints here') 
     parser.add_argument('--structure_model', type=str, default="unet", choices=["unet" , "horizonnet"])
     parser.add_argument('--type_sp', type=str, default='SEAN', choices=["SEAN"])
-    parser.add_argument('--model_folder', type = str, default = '', help = 'Save checkpoints here')
+    parser.add_argument('--model_folder', type = str, default = 'D:/codes/DRext_files/DRext_files/', help = 'Save checkpoints here')
     parser.add_argument('--height', type=int, default=256)
     parser.add_argument('--width', type=int, default=512)
     parser.add_argument('--num_classes', type=int, default=3)
@@ -77,6 +77,15 @@ def parseArguments():
     parser.add_argument('-d','--disp_iters', type=int, default=5, help='Log training progress (i.e. loss etc.) on console every <disp_iters> iterations.')
     parser.add_argument("--viz_loss_every", type=int, default=5, help = "Iteration interval that losses will be reported at the visdom server for visualization.")
     parser.add_argument("--viz_img_every", type=int, default=15, help = "Iteration interval that images will be reported at the visdom server for visualization.")
+    #Unet discriminator 
+    parser.add_argument('--num_res_blocks', type=int, default=6, help='number of residual blocks in G and D')
+    parser.add_argument('--unet_discr', type=bool, default=True, help='Whether using PatchGAN or UNet Discriminator')
+    parser.add_argument('--no_spectral_norm', action='store_true', help='this option deactivates spectral norm in all layers')
+    parser.add_argument('--no_labelmix', action='store_true', default=False, help='if specified, do *not* use LabelMix')
+    parser.add_argument('--contain_dontcare_label', default=True, help='if specified, do *not* use LabelMix')
+    parser.add_argument('--no_balancing_inloss', action='store_true', default=False, help='if specified, do *not* use class balancing in the loss function')
+    
+    
     arguments = parser.parse_args()
     return arguments
 
