@@ -58,10 +58,12 @@ if __name__ == "__main__":
         layout = batch["layout"]
         layout_one_hot = batch["layout_one_hot"]
         b,c,h,w = layout.size()
-        # showImages(
-        #     img = img[0].permute(1,2,0).numpy()
-        #     #masked = masked[0].permute(1,2,0).numpy(),
-        #     #gt = img_gt[0].permute(1,2,0).numpy(),
-        #     #mask = mask[0].permute(1,2,0).numpy(),
-        # )
+
+        img_viz = cv2.cvtColor(img[0].permute(1,2,0).numpy(), cv2.COLOR_BGR2RGB)
+        showImages(
+            img = img_viz
+            #masked = masked[0].permute(1,2,0).numpy(),
+            #gt = img_gt[0].permute(1,2,0).numpy(),
+            #mask = mask[0].permute(1,2,0).numpy(),
+        )
         
