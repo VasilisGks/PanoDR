@@ -90,6 +90,8 @@ class InpaintingModel(BaseModel):
         self.second_in = None
         self.d_out_fake = None
         self.d_out_real = None
+        self.input_D_fake = None
+        self.input_D_real = None
         self.attention_weights_256 = S360.weights.theta_confidence(                
         S360.grid.create_spherical_grid(self.opt.width)).to(self.device)
 
@@ -123,7 +125,8 @@ class InpaintingModel(BaseModel):
 
     def forward_G(self):  
         if self.opt.unet_discr == True:
-            self.d_out_fake = self.netD(self.out)
+            self.input_D_fake = torch.cat((self.out, self.inverse_mask), 1)
+            self.d_out_fake = self.netD(self.input_D_fake)
             self.G_loss_adv = self.oasis_losses.loss(self.d_out_fake, self.gt_label_one_hot, for_real=True)
 
         else:
@@ -150,8 +153,8 @@ class InpaintingModel(BaseModel):
     def forward_D(self):
         if self.opt.unet_discr == True:
             loss_D_fake =  self.oasis_losses.loss(self.d_out_fake.detach(), self.gt_label_one_hot,for_real=False)
-            self.d_out_real = self.netD(self.gt_empty) 
-            loss_D_real =  self.oasis_losses.loss(self.d_out_real, self.gt_label_one_hot,for_real=True)
+            self.input_D_real = torch.cat((self.gt_empty, self.inverse_mask), 1)
+            loss_D_real =  self.oasis_losses.loss(self.input_D_real, self.gt_label_one_hot,for_real=True)
             self.D_loss = loss_D_real + loss_D_fake 
 
         else:

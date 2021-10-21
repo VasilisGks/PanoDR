@@ -2,7 +2,6 @@
 
 import torch as th
 
-
 # =============================================================
 # Interface for the losses
 # =============================================================
@@ -35,7 +34,6 @@ class GANLoss:
         """
         raise NotImplementedError("gen_loss method has not been implemented")
 
-
 class LSGAN(GANLoss):
     
     def __init__(self, dis):
@@ -55,8 +53,6 @@ class LSGAN(GANLoss):
         loss =  0.5 * ((th.mean(fake_preds) - 1) ** 2)
         
         return loss, real_feats, fake_feats
-
-
 
 class HingeGAN(GANLoss):
 
@@ -78,8 +74,6 @@ class HingeGAN(GANLoss):
         loss = -th.mean(f_preads)
 
         return loss, r_feats, f_feats
-
-
 
 class RelativisticAverageHingeGAN(GANLoss):
 
